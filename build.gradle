@@ -86,6 +86,7 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	outputs.dir snippetsDir  //SpringRestDocs
 	finalizedBy jacocoTestReport  // 테스트 실행 후 항상 report가 생성됩니다.
 }
 
