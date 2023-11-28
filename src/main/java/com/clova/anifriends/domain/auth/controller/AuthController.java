@@ -1,8 +1,8 @@
 package com.clova.anifriends.domain.auth.controller;
 
-import com.clova.anifriends.domain.auth.controller.request.LoginRequest;
-import com.clova.anifriends.domain.auth.controller.response.LoginResponse;
-import com.clova.anifriends.domain.auth.jwt.response.TokenResponse;
+import com.clova.anifriends.domain.auth.dto.request.LoginRequest;
+import com.clova.anifriends.domain.auth.dto.response.LoginResponse;
+import com.clova.anifriends.domain.auth.dto.response.TokenResponse;
 import com.clova.anifriends.domain.auth.service.AuthService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -30,7 +30,8 @@ public class AuthController {
         HttpServletResponse response) {
         TokenResponse tokenResponse = authService.volunteerLogin(
             loginRequest.email(),
-            loginRequest.password());
+            loginRequest.password(),
+            loginRequest.deviceToken());
         addRefreshTokenCookie(response, tokenResponse);
         LoginResponse loginResponse = LoginResponse.from(tokenResponse);
         return ResponseEntity.ok(loginResponse);
@@ -42,7 +43,8 @@ public class AuthController {
         HttpServletResponse response) {
         TokenResponse tokenResponse = authService.shelterLogin(
             loginRequest.email(),
-            loginRequest.password());
+            loginRequest.password(),
+            loginRequest.deviceToken());
         addRefreshTokenCookie(response, tokenResponse);
         LoginResponse loginResponse = LoginResponse.from(tokenResponse);
         return ResponseEntity.ok(loginResponse);

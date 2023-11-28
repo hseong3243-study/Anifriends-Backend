@@ -52,4 +52,12 @@ public class VolunteerImage extends BaseTimeEntity {
             throw new VolunteerBadRequestException(ErrorCode.BAD_REQUEST, "이미지 url은 필수 항목입니다.");
         }
     }
+
+    public boolean isSameWith(String imageUrl) {
+        return this.imageUrl.equals(imageUrl);
+    }
+
+    public boolean isDifferentFrom(String imageUrl) {
+        return !this.imageUrl.equals(imageUrl);
+    }
 }

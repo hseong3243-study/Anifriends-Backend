@@ -8,14 +8,15 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
 import com.clova.anifriends.domain.auth.RefreshToken;
+import com.clova.anifriends.domain.auth.dto.response.TokenResponse;
 import com.clova.anifriends.domain.auth.exception.AuthAuthenticationException;
 import com.clova.anifriends.domain.auth.exception.AuthNotFoundException;
 import com.clova.anifriends.domain.auth.jwt.JwtProvider;
 import com.clova.anifriends.domain.auth.jwt.UserRole;
-import com.clova.anifriends.domain.auth.jwt.response.TokenResponse;
 import com.clova.anifriends.domain.auth.repository.RefreshTokenRepository;
 import com.clova.anifriends.domain.auth.support.AuthFixture;
-import com.clova.anifriends.domain.auth.support.MockPasswordEncode;
+import com.clova.anifriends.domain.auth.support.MockPasswordEncoder;
+import com.clova.anifriends.domain.common.CustomPasswordEncoder;
 import com.clova.anifriends.domain.shelter.Shelter;
 import com.clova.anifriends.domain.shelter.repository.ShelterRepository;
 import com.clova.anifriends.domain.volunteer.Volunteer;
@@ -33,7 +34,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,7 +52,7 @@ class AuthServiceTest {
     RefreshTokenRepository refreshTokenRepository;
 
     @Spy
-    PasswordEncoder passwordEncoder = new MockPasswordEncode();
+    CustomPasswordEncoder passwordEncoder = new MockPasswordEncoder();
 
     @Spy
     JwtProvider jwtProvider = AuthFixture.jwtProvider();
@@ -63,8 +63,9 @@ class AuthServiceTest {
 
         String email = "email@email.com";
         String password = "password123!";
-        Volunteer volunteer = new Volunteer(email, passwordEncoder.encode(password),
-            LocalDate.now().toString(), "010-1234-1234", "MALE", "name");
+        String deviceToken = "token";
+        Volunteer volunteer = new Volunteer(email, password,
+            LocalDate.now().toString(), "010-1234-1234", "MALE", "name", passwordEncoder);
 
         @BeforeEach
         void setUp() {
@@ -79,11 +80,12 @@ class AuthServiceTest {
                 Optional.ofNullable(volunteer));
 
             //when
-            TokenResponse response = authService.volunteerLogin(email, password);
+            TokenResponse response = authService.volunteerLogin(email, password, deviceToken);
 
             //then
             assertThat(response.accessToken()).isNotBlank();
             assertThat(response.refreshToken()).isNotBlank();
+            assertThat(volunteer.getDeviceToken()).isEqualTo(deviceToken);
         }
 
         @Test
@@ -94,10 +96,26 @@ class AuthServiceTest {
                 Optional.ofNullable(volunteer));
 
             //when
-            TokenResponse response = authService.volunteerLogin(email, password);
+            TokenResponse response = authService.volunteerLogin(email, password, deviceToken);
 
             //then
             then(refreshTokenRepository).should().save(any());
+        }
+
+        @Test
+        @DisplayName("성공: deviceToken이 null인 경우")
+        void loginWhenDeviceTokenIsNull() {
+            // given
+            deviceToken = null;
+            given(volunteerRepository.findByEmail(any())).willReturn(
+                Optional.ofNullable(volunteer));
+
+            // when
+            TokenResponse response = authService.volunteerLogin(email, password, deviceToken);
+
+            // then
+            assertThat(response.accessToken()).isNotBlank();
+            assertThat(response.refreshToken()).isNotBlank();
         }
 
         @Test
@@ -111,7 +129,7 @@ class AuthServiceTest {
 
             //when
             Exception exception = catchException(
-                () -> authService.volunteerLogin(email, notEqualsPassword));
+                () -> authService.volunteerLogin(email, notEqualsPassword, deviceToken));
 
             //then
             assertThat(exception).isInstanceOf(AuthAuthenticationException.class);
@@ -124,7 +142,7 @@ class AuthServiceTest {
             given(volunteerRepository.findByEmail(any())).willReturn(Optional.empty());
 
             //when
-            Exception exception = catchException(() -> authService.volunteerLogin(email, password));
+            Exception exception = catchException(() -> authService.volunteerLogin(email, password, deviceToken));
 
             //then
             assertThat(exception).isInstanceOf(AuthAuthenticationException.class);
@@ -137,8 +155,9 @@ class AuthServiceTest {
 
         String email = "email@email.com";
         String password = "password123!";
-        Shelter shelter = new Shelter(email, passwordEncoder.encode(password), "address",
-            "addressDetail", "name", "02-1234-5678", "02-1234-5678", false);
+        String deviceToken = "token";
+        Shelter shelter = new Shelter(email, password, "address",
+            "addressDetail", "name", "02-1234-5678", "02-1234-5678", false, passwordEncoder);
 
         @BeforeEach
         void setUp() {
@@ -152,11 +171,12 @@ class AuthServiceTest {
             given(shelterRepository.findByEmail(any())).willReturn(Optional.ofNullable(shelter));
 
             //when
-            TokenResponse response = authService.shelterLogin(email, password);
+            TokenResponse response = authService.shelterLogin(email, password, deviceToken);
 
             //then
             assertThat(response.accessToken()).isNotBlank();
             assertThat(response.refreshToken()).isNotBlank();
+            assertThat(shelter.getDeviceToken()).isEqualTo(deviceToken);
         }
 
         @Test
@@ -167,10 +187,25 @@ class AuthServiceTest {
                 Optional.ofNullable(shelter));
 
             //when
-            TokenResponse response = authService.shelterLogin(email, password);
+            TokenResponse response = authService.shelterLogin(email, password, deviceToken);
 
             //then
             then(refreshTokenRepository).should().save(any());
+        }
+
+        @Test
+        @DisplayName("성공: deviceToken이 null인 경우")
+        void loginWhenDeviceTokenIsNull() {
+            // given
+            deviceToken = null;
+            given(shelterRepository.findByEmail(any())).willReturn(Optional.ofNullable(shelter));
+
+            // when
+            TokenResponse response = authService.shelterLogin(email, password, deviceToken);
+
+            // then
+            assertThat(response.accessToken()).isNotBlank();
+            assertThat(response.refreshToken()).isNotBlank();
         }
 
         @Test
@@ -184,7 +219,7 @@ class AuthServiceTest {
 
             //when
             Exception exception = catchException(
-                () -> authService.shelterLogin(email, notEqualsPassword));
+                () -> authService.shelterLogin(email, notEqualsPassword, deviceToken));
 
             //then
             assertThat(exception).isInstanceOf(AuthAuthenticationException.class);
@@ -197,7 +232,7 @@ class AuthServiceTest {
             given(shelterRepository.findByEmail(any())).willReturn(Optional.empty());
 
             //when
-            Exception exception = catchException(() -> authService.shelterLogin(email, password));
+            Exception exception = catchException(() -> authService.shelterLogin(email, password, deviceToken));
 
             //then
             assertThat(exception).isInstanceOf(AuthAuthenticationException.class);
@@ -224,8 +259,9 @@ class AuthServiceTest {
 
             //when
             //then
-            Awaitility.await().atMost(1, TimeUnit.SECONDS).untilAsserted(() -> {
-                TokenResponse resultTokenResponse = authService.refreshAccessToken(refreshTokenValue);
+            Awaitility.await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
+                TokenResponse resultTokenResponse = authService.refreshAccessToken(
+                    refreshTokenValue);
 
                 assertThat(resultTokenResponse.refreshToken()).isNotEqualTo(refreshTokenValue);
                 assertThat(resultTokenResponse.accessToken()).isNotBlank();

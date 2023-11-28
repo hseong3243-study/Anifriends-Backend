@@ -1,8 +1,10 @@
 package com.clova.anifriends.domain.applicant.service;
 
 import static com.clova.anifriends.domain.applicant.support.ApplicantFixture.applicant;
-import static com.clova.anifriends.domain.applicant.wrapper.ApplicantStatus.ATTENDANCE;
-import static com.clova.anifriends.domain.applicant.wrapper.ApplicantStatus.PENDING;
+import static com.clova.anifriends.domain.applicant.vo.ApplicantStatus.ATTENDANCE;
+import static com.clova.anifriends.domain.applicant.vo.ApplicantStatus.NO_SHOW;
+import static com.clova.anifriends.domain.applicant.vo.ApplicantStatus.PENDING;
+import static com.clova.anifriends.domain.applicant.vo.ApplicantStatus.REFUSED;
 import static com.clova.anifriends.domain.recruitment.support.fixture.RecruitmentFixture.recruitment;
 import static com.clova.anifriends.domain.shelter.support.ShelterFixture.shelter;
 import static com.clova.anifriends.domain.volunteer.support.VolunteerFixture.volunteer;
@@ -12,19 +14,23 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.util.ReflectionTestUtils.setField;
 
 import com.clova.anifriends.domain.applicant.Applicant;
-import com.clova.anifriends.domain.applicant.dto.FindApplicantsApprovedResponse;
-import com.clova.anifriends.domain.applicant.dto.FindApplyingVolunteersResponse;
-import com.clova.anifriends.domain.applicant.exception.ApplicantConflictException;
+import com.clova.anifriends.domain.applicant.dto.FindApplicantsResponse;
+import com.clova.anifriends.domain.applicant.dto.response.FindApplicantsApprovedResponse;
+import com.clova.anifriends.domain.applicant.dto.response.FindApplyingVolunteersResponse;
 import com.clova.anifriends.domain.applicant.repository.ApplicantRepository;
+import com.clova.anifriends.domain.applicant.service.dto.UpdateApplicantAttendanceCommand;
 import com.clova.anifriends.domain.applicant.support.ApplicantFixture;
 import com.clova.anifriends.domain.recruitment.Recruitment;
 import com.clova.anifriends.domain.recruitment.repository.RecruitmentRepository;
 import com.clova.anifriends.domain.recruitment.support.fixture.RecruitmentFixture;
-import com.clova.anifriends.domain.recruitment.wrapper.RecruitmentInfo;
+import com.clova.anifriends.domain.recruitment.vo.RecruitmentInfo;
+import com.clova.anifriends.domain.review.exception.ApplicantNotFoundException;
 import com.clova.anifriends.domain.shelter.Shelter;
 import com.clova.anifriends.domain.shelter.support.ShelterFixture;
 import com.clova.anifriends.domain.volunteer.Volunteer;
@@ -40,6 +46,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ApplicantServiceTest {
@@ -79,12 +87,10 @@ class ApplicantServiceTest {
             setField(volunteer, "volunteerId", 1L);
             setField(recruitment, "recruitmentId", 1L);
             setField(recruitment, "info", recruitmentInfo);
-            given(recruitmentRepository.findById(anyLong())).willReturn(
+            given(recruitmentRepository.findByIdPessimistic(anyLong())).willReturn(
                 Optional.ofNullable(recruitment));
             given(volunteerRepository.findById(anyLong())).willReturn(
                 Optional.ofNullable(volunteer));
-            given(applicantRepository.existsByRecruitmentAndVolunteer(recruitment, volunteer))
-                .willReturn(false);
 
             // when
             applicantService.registerApplicant(recruitment.getRecruitmentId(),
@@ -101,19 +107,19 @@ class ApplicantServiceTest {
             setField(volunteer, "volunteerId", 1L);
             setField(recruitment, "recruitmentId", 1L);
             setField(recruitment, "info", recruitmentInfo);
-            given(recruitmentRepository.findById(anyLong())).willReturn(
+            given(recruitmentRepository.findByIdPessimistic(anyLong())).willReturn(
                 Optional.ofNullable(recruitment));
             given(volunteerRepository.findById(anyLong())).willReturn(
                 Optional.ofNullable(volunteer));
-            when(applicantRepository.existsByRecruitmentAndVolunteer(recruitment, volunteer))
-                .thenReturn(true);
+            when(applicantRepository.save(any(Applicant.class))).thenThrow(
+                DataIntegrityViolationException.class);
 
             // when
             Exception exception = catchException(() -> applicantService.registerApplicant(
                 recruitment.getRecruitmentId(), volunteer.getVolunteerId()));
 
             // then
-            assertThat(exception).isInstanceOf(ApplicantConflictException.class);
+            assertThat(exception).isInstanceOf(DataIntegrityViolationException.class);
         }
     }
 
@@ -193,13 +199,13 @@ class ApplicantServiceTest {
 
             // then
             assertThat(foundApplyingVolunteers.findApplyingVolunteerResponses().get(0)
-                .isWritedReview()).isEqualTo(
+                .applicantIsWritedReview()).isEqualTo(
                 findApplyingVolunteersResponse.findApplyingVolunteerResponses().get(0)
-                    .isWritedReview());
+                    .applicantIsWritedReview());
             assertThat(foundApplyingVolunteers.findApplyingVolunteerResponses().get(1)
-                .isWritedReview()).isEqualTo(
+                .applicantIsWritedReview()).isEqualTo(
                 findApplyingVolunteersResponse.findApplyingVolunteerResponses().get(1)
-                    .isWritedReview());
+                    .applicantIsWritedReview());
         }
 
         @Test
@@ -231,13 +237,161 @@ class ApplicantServiceTest {
 
             // then
             assertThat(foundApplyingVolunteers.findApplyingVolunteerResponses().get(0)
-                .isWritedReview()).isEqualTo(
+                .applicantIsWritedReview()).isEqualTo(
                 findApplyingVolunteersResponse.findApplyingVolunteerResponses().get(0)
-                    .isWritedReview());
+                    .applicantIsWritedReview());
             assertThat(foundApplyingVolunteers.findApplyingVolunteerResponses().get(1)
-                .isWritedReview()).isEqualTo(
+                .applicantIsWritedReview()).isEqualTo(
                 findApplyingVolunteersResponse.findApplyingVolunteerResponses().get(1)
-                    .isWritedReview());
+                    .applicantIsWritedReview());
+        }
+    }
+
+    @Nested
+    @DisplayName("findApplicants 메서드 실행 시")
+    class FindApplicantsTest {
+
+        @Test
+        @DisplayName("성공")
+        void findApplicants() {
+            // given
+            Shelter shelter = shelter();
+            ReflectionTestUtils.setField(shelter, "shelterId", 1L);
+            Recruitment recruitment = recruitment(shelter);
+            ReflectionTestUtils.setField(recruitment, "recruitmentId", 1L);
+            Volunteer volunteer = volunteer();
+            Applicant applicantAttended = ApplicantFixture.applicant(recruitment, volunteer,
+                ATTENDANCE);
+            Applicant applicantRefused = ApplicantFixture.applicant(recruitment, volunteer,
+                REFUSED);
+            Applicant applicantPended = ApplicantFixture.applicant(recruitment, volunteer, PENDING);
+            Applicant applicantNoShow = ApplicantFixture.applicant(recruitment, volunteer, NO_SHOW);
+
+            FindApplicantsResponse response = FindApplicantsResponse.from(
+                List.of(applicantAttended, applicantRefused, applicantPended, applicantNoShow),
+                recruitment
+            );
+
+            when(recruitmentRepository.findById(anyLong())).thenReturn(Optional.of(recruitment));
+            when(applicantRepository.findByRecruitmentIdAndShelterId(anyLong(), anyLong()))
+                .thenReturn(
+                    List.of(applicantAttended, applicantRefused, applicantPended, applicantNoShow));
+
+            // when
+            FindApplicantsResponse result = applicantService.findApplicants(
+                shelter.getShelterId(), recruitment.getRecruitmentId());
+
+            // then
+            assertThat(result).isEqualTo(response);
+        }
+    }
+
+    @Nested
+    @DisplayName("updateApplicantAttendance 실행 시")
+    class UpdateApplicantAttendance {
+
+        @Test
+        @DisplayName("성공")
+        void updateApplicantAttendance() {
+            // given
+            Volunteer volunteer1 = VolunteerFixture.volunteer();
+            Volunteer volunteer2 = VolunteerFixture.volunteer();
+            Volunteer volunteer3 = VolunteerFixture.volunteer();
+            Volunteer volunteer4 = VolunteerFixture.volunteer();
+
+            Shelter shelter = ShelterFixture.shelter();
+            Recruitment recruitment = RecruitmentFixture.recruitment(shelter);
+
+            Applicant applicantAttendance = ApplicantFixture.applicant(recruitment, volunteer1,
+                ATTENDANCE, 1L);
+            Applicant applicantAttendanceToNoShow = ApplicantFixture.applicant(recruitment,
+                volunteer2, ATTENDANCE, 2L);
+            Applicant applicantNoShowToAttendance = ApplicantFixture.applicant(recruitment,
+                volunteer3, NO_SHOW, 3L);
+            Applicant applicantNoShow = ApplicantFixture.applicant(recruitment, volunteer4,
+                NO_SHOW, 4L);
+
+            UpdateApplicantAttendanceCommand command1 = new UpdateApplicantAttendanceCommand(
+                applicantAttendance.getApplicantId(), true);
+            UpdateApplicantAttendanceCommand command2 = new UpdateApplicantAttendanceCommand(
+                applicantAttendanceToNoShow.getApplicantId(), false);
+            UpdateApplicantAttendanceCommand command3 = new UpdateApplicantAttendanceCommand(
+                applicantNoShowToAttendance.getApplicantId(), true);
+            UpdateApplicantAttendanceCommand command4 = new UpdateApplicantAttendanceCommand(
+                applicantNoShow.getApplicantId(), false);
+
+            List<UpdateApplicantAttendanceCommand> commands = List.of(command1, command2, command3,
+                command4);
+
+            // when
+            applicantService.updateApplicantAttendance(shelter.getShelterId(),
+                recruitment.getRecruitmentId(), commands);
+
+            // then
+            verify(applicantRepository, times(1))
+                .updateBulkAttendance(shelter.getShelterId(), recruitment.getRecruitmentId(),
+                    List.of(applicantAttendance.getApplicantId(),
+                        applicantNoShowToAttendance.getApplicantId()), ATTENDANCE);
+
+            verify(applicantRepository, times(1))
+                .updateBulkAttendance(shelter.getShelterId(), recruitment.getRecruitmentId(),
+                    List.of(applicantAttendanceToNoShow.getApplicantId(),
+                        applicantNoShow.getApplicantId()), NO_SHOW);
+
+        }
+    }
+
+    @Nested
+    @DisplayName("updateApplicantStatus 실행 시")
+    class UpdateApplicantStatus {
+
+        @Test
+        @DisplayName("성공")
+        void updateApplicantStatus() {
+            // given
+            Volunteer volunteer = VolunteerFixture.volunteer();
+            ReflectionTestUtils.setField(volunteer, "volunteerId", 1L);
+            Shelter shelter = ShelterFixture.shelter();
+            ReflectionTestUtils.setField(shelter, "shelterId", 1L);
+            Recruitment recruitment = RecruitmentFixture.recruitment(shelter);
+            ReflectionTestUtils.setField(recruitment, "recruitmentId", 1L);
+            Applicant applicant = ApplicantFixture.applicant(recruitment, volunteer, PENDING);
+            ReflectionTestUtils.setField(applicant, "applicantId", 1L);
+            when(
+                applicantRepository.findByApplicantIdAndRecruitment_RecruitmentIdAndRecruitment_Shelter_ShelterId(
+                    anyLong(), anyLong(), anyLong())).thenReturn(Optional.of(applicant));
+
+            // when
+            applicantService.updateApplicantStatus(applicant.getApplicantId(),
+                recruitment.getRecruitmentId(), shelter.getShelterId(), false);
+
+            // then
+            assertThat(applicant.getStatus()).isEqualTo(REFUSED);
+        }
+
+        @Test
+        @DisplayName("예외(ApplicantNotFoundException): 존재하지 않는 신청인 경우")
+        void throwExceptionWhenApplicantNotFound() {
+            // given
+            Volunteer volunteer = VolunteerFixture.volunteer();
+            ReflectionTestUtils.setField(volunteer, "volunteerId", 1L);
+            Shelter shelter = ShelterFixture.shelter();
+            ReflectionTestUtils.setField(shelter, "shelterId", 1L);
+            Recruitment recruitment = RecruitmentFixture.recruitment(shelter);
+            ReflectionTestUtils.setField(recruitment, "recruitmentId", 1L);
+            Applicant applicant = ApplicantFixture.applicant(recruitment, volunteer, PENDING);
+            ReflectionTestUtils.setField(applicant, "applicantId", 1L);
+            when(
+                applicantRepository.findByApplicantIdAndRecruitment_RecruitmentIdAndRecruitment_Shelter_ShelterId(
+                    anyLong(), anyLong(), anyLong())).thenReturn(Optional.empty());
+
+            // when
+            Exception exception = catchException(() -> applicantService.updateApplicantStatus(
+                applicant.getApplicantId(), recruitment.getRecruitmentId(),
+                shelter.getShelterId(), false));
+
+            // then
+            assertThat(exception).isInstanceOf(ApplicantNotFoundException.class);
         }
     }
 }

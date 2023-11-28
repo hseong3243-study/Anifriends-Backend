@@ -1,9 +1,9 @@
 package com.clova.anifriends.domain.animal.dto.response;
 
 import com.clova.anifriends.domain.animal.Animal;
-import com.clova.anifriends.domain.animal.wrapper.AnimalActive;
-import com.clova.anifriends.domain.animal.wrapper.AnimalGender;
-import com.clova.anifriends.domain.animal.wrapper.AnimalType;
+import com.clova.anifriends.domain.animal.vo.AnimalActive;
+import com.clova.anifriends.domain.animal.vo.AnimalGender;
+import com.clova.anifriends.domain.animal.vo.AnimalType;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -35,7 +35,7 @@ public record FindAnimalByShelterResponse(
             animal.getWeight(),
             animal.getInformation(),
             animal.isAdopted(),
-            animal.getImageUrls()
+            animal.getImages()
         );
     }
 }

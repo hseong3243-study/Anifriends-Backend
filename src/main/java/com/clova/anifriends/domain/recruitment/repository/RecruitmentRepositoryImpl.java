@@ -8,6 +8,7 @@ import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -15,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -52,7 +55,72 @@ public class RecruitmentRepositoryImpl implements
                 recruitmentStartTimeGoe(startDate),
                 recruitmentStartTimeLoe(endDate)
             ).fetchOne();
-        return new PageImpl<>(content, pageable, count);
+        return new PageImpl<>(content, pageable, count != null ? count : 0);
+    }
+
+    @Override
+    public Slice<Recruitment> findRecruitmentsV2(String keyword, LocalDate startDate,
+        LocalDate endDate, Boolean isClosed, boolean titleContains, boolean contentContains,
+        boolean shelterNameContains, LocalDateTime createdAt, Long recruitmentId,
+        Pageable pageable) {
+        List<Recruitment> content = query.select(recruitment)
+            .from(recruitment)
+            .join(recruitment.shelter)
+            .leftJoin(recruitment.applicants)
+            .where(
+                keywordSearch(keyword, titleContains, contentContains, shelterNameContains),
+                recruitmentIsClosed(isClosed),
+                recruitmentStartTimeGoe(startDate),
+                recruitmentStartTimeLoe(endDate),
+                cursorId(recruitmentId, createdAt)
+            )
+            .orderBy(recruitment.createdAt.desc())
+            .limit(pageable.getPageSize() + 1L)
+            .offset(pageable.getOffset())
+            .fetch();
+
+        boolean hasNext = hasNext(pageable.getPageSize(), content);
+        return new SliceImpl<>(content, pageable, hasNext);
+    }
+
+    private boolean hasNext(int pageSize, List<Recruitment> recruitments) {
+        if (recruitments.size() <= pageSize) {
+            return false;
+        }
+
+        recruitments.remove(pageSize);
+        return true;
+    }
+
+    @Override
+    public Long countFindRecruitmentsV2(String keyword, LocalDate startDate,
+        LocalDate endDate, Boolean isClosed, boolean titleContains, boolean contentContains,
+        boolean shelterNameContains) {
+
+        Long count = query.select(recruitment.count())
+            .from(recruitment)
+            .join(recruitment.shelter)
+            .where(
+                keywordSearch(keyword, titleContains, contentContains, shelterNameContains),
+                recruitmentIsClosed(isClosed),
+                recruitmentStartTimeGoe(startDate),
+                recruitmentStartTimeLoe(endDate)
+            ).fetchOne();
+
+        return count != null ? count : 0;
+    }
+
+    private BooleanExpression cursorId(Long recruitmentId, LocalDateTime createdAt) {
+        if (recruitmentId == null || createdAt == null) {
+            return null;
+        }
+
+        return recruitment.createdAt.lt(createdAt)
+            .or(
+                recruitment.recruitmentId.lt(recruitmentId)
+                    .and(recruitment.createdAt.eq(createdAt)
+                    )
+            );
     }
 
     private BooleanBuilder keywordSearch(String keyword, boolean titleFilter,
@@ -76,7 +144,8 @@ public class RecruitmentRepositoryImpl implements
         return keyword != null ? recruitment.content.content.contains(keyword) : null;
     }
 
-    private BooleanExpression recruitmentShelterNameContains(String keyword, boolean shelterNameFilter) {
+    private BooleanExpression recruitmentShelterNameContains(String keyword,
+        boolean shelterNameFilter) {
         if (!shelterNameFilter) {
             return null;
         }
@@ -95,7 +164,8 @@ public class RecruitmentRepositoryImpl implements
     }
 
     private BooleanExpression recruitmentStartTimeLoe(LocalDate endDate) {
-        return endDate != null ? recruitment.info.startTime.loe(endDate.plusDays(1).atStartOfDay()) : null;
+        return endDate != null ? recruitment.info.startTime.loe(endDate.plusDays(1).atStartOfDay())
+            : null;
     }
 
     private BooleanBuilder nullSafeBuilder(Supplier<BooleanExpression> supplier) {
@@ -108,12 +178,14 @@ public class RecruitmentRepositoryImpl implements
 
     @Override
     public Page<Recruitment> findRecruitmentsByShelterOrderByCreatedAt(long shelterId,
-        String keyword, LocalDate startDate, LocalDate endDate, Boolean content, Boolean title,
+        String keyword, LocalDate startDate, LocalDate endDate, Boolean isClosed, Boolean content,
+        Boolean title,
         Pageable pageable) {
 
         Predicate predicate = recruitment.shelter.shelterId.eq(shelterId)
             .and(getDateCondition(startDate, endDate))
-            .and(getKeywordCondition(keyword, content, title));
+            .and(getKeywordCondition(keyword, content, title))
+            .and(recruitmentIsClosed(isClosed));
 
         List<Recruitment> recruitments = query.selectFrom(recruitment)
             .where(predicate)
@@ -121,7 +193,13 @@ public class RecruitmentRepositoryImpl implements
             .offset(pageable.getOffset())
             .limit(pageable.getPageSize())
             .fetch();
-        return new PageImpl<>(recruitments);
+
+        Long count = query.select(recruitment.count())
+            .from(recruitment)
+            .where(predicate)
+            .fetchOne();
+
+        return new PageImpl<>(recruitments, pageable, count == null ? 0 : count);
     }
 
     @Override
@@ -134,7 +212,14 @@ public class RecruitmentRepositoryImpl implements
             .offset(pageable.getOffset())
             .limit(pageable.getPageSize())
             .fetch();
-        return new PageImpl<>(recruitments);
+
+        Long count = query.select(recruitment.count())
+            .from(recruitment)
+            .where(recruitment.shelter.shelterId.eq(shelterId)
+                .and(recruitment.info.isClosed.eq(false)))
+            .fetchOne();
+
+        return new PageImpl<>(recruitments, pageable, count == null ? 0 : count);
     }
 
     Predicate getDateCondition(LocalDate startDate, LocalDate endDate) {
