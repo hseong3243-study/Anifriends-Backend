@@ -41,7 +41,7 @@ jobs:
           username: ec2-user
           host: ${{ secrets.AWS_DEV_HOSTNAME }}
           key: ${{ secrets.AWS_DEV_PRIVATE_KEY }}
-          source: "./src/main/resources/backend/docker-compose.yml"
+          source: "./src/main/resources/docker-compose.yml"
           target: "/home/ec2-user/"
 
       ## springboot 도커 이미지 빌드 후 도커허브에 push하기
