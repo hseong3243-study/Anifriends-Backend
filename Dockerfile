@@ -6,5 +6,4 @@ COPY ${JAR_FILE} anifriends.jar
 
 ENV spring_profile=${SPRING_PROFILE}
 
-ENTRYPOINT java -jar anifriends.jar \
-            --spring.profiles.active=${spring_profile}
+ENTRYPOINT java -jar anifriends.jar
